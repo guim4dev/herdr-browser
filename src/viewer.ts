@@ -49,7 +49,7 @@ import {
   type PaneGraphicsPlacement,
   type PaneGraphicsTarget,
 } from "./herdrGraphics";
-import { encodeKittyPng, terminalImageSize } from "./kitty";
+import { KittyFrameWriter, terminalImageSize } from "./kitty";
 import { parseSgrMouseInput, type MouseMove, type SgrMouseEvent, type TerminalKeyInput } from "./mouse";
 import type { BrowserTabInfo, DaemonMetrics, DaemonStatus } from "./daemonProtocol";
 import { loadConfig, saveBrowserZoom } from "./config";
@@ -97,6 +97,7 @@ type RenderOptions = {
 
 type RenderContext = {
   viewId: string;
+  kittyFrames: KittyFrameWriter;
   graphicsTransport: GraphicsTransport;
   browserZoom: number;
   showDiagnostics: boolean;
@@ -206,6 +207,7 @@ async function main() {
   const paneGraphicsTarget = paneGraphicsTargetFromEnv();
   const renderContext: RenderContext = {
     viewId,
+    kittyFrames: new KittyFrameWriter(),
     graphicsTransport: configuredGraphicsTransport(),
     browserZoom: config.browserZoom,
     showDiagnostics: config.showDiagnostics,
@@ -298,12 +300,15 @@ async function renderOnce(
       ? context.paneGraphics?.transport ?? "native"
       : "kitty-pty";
     if (!renderedViaPaneGraphics) {
-      process.stdout.write(`\x1b[${TOOLBAR_ROWS + 1};1H`);
-      process.stdout.write(encodeKittyPng(png, {
+      const frame = context.kittyFrames.encode(png, {
         columns: size.columns,
         rows: imageRows,
-        deletePrevious: options.deletePrevious,
-      }));
+        force: options.deletePrevious,
+      });
+      if (frame) {
+        process.stdout.write(`\x1b[${TOOLBAR_ROWS + 1};1H`);
+        process.stdout.write(frame);
+      }
     }
   }
   writeDiagnosticsLine(context, size, renderStatusLine({

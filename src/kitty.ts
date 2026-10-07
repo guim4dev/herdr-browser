@@ -68,3 +68,38 @@ function placementParams(options: KittyRenderOptions): string {
   }
   return params.length > 0 ? `,${params.join(",")}` : "";
 }
+
+// Double-buffered frame writer for a pane whose output may travel over a remote
+// attach. Re-transmitting under one image id makes the outer terminal drop the
+// placement until the new data arrives, which shows as flicker on a slow link.
+// The new frame goes under the other id first, and the old one is deleted after.
+// Identical frames (hover, clicks that change nothing) are not re-sent.
+export class KittyFrameWriter {
+  private readonly imageIds: [number, number];
+  private shownId: number | null = null;
+  private lastKey: string | null = null;
+
+  constructor(options: { imageIds?: [number, number] } = {}) {
+    this.imageIds = options.imageIds ?? [DEFAULT_IMAGE_ID, DEFAULT_IMAGE_ID + 1];
+  }
+
+  encode(pngBase64: string, options: { columns: number; rows: number; force?: boolean }): string | null {
+    const key = `${options.columns}x${options.rows}:${Bun.hash(pngBase64)}`;
+    if (!options.force && key === this.lastKey) {
+      return null;
+    }
+    const nextId = this.shownId === this.imageIds[0] ? this.imageIds[1] : this.imageIds[0];
+    let output = encodeKittyPng(pngBase64, {
+      imageId: nextId,
+      columns: options.columns,
+      rows: options.rows,
+      deletePrevious: false,
+    });
+    if (this.shownId !== null) {
+      output += `\x1b_Ga=d,d=I,i=${this.shownId},q=2\x1b\\`;
+    }
+    this.shownId = nextId;
+    this.lastKey = key;
+    return output;
+  }
+}
