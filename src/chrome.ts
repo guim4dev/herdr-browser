@@ -48,6 +48,12 @@ export async function launchChrome(): Promise<ChromeInstance> {
     "--disable-component-update",
     "--disable-default-apps",
     "--disable-dev-shm-usage",
+    // Memory/CPU diet for shared dev hosts: no GPU process (headless captures
+    // fall back to software compositing), at most two renderers, and no
+    // per-site process split for third-party iframes (ads/trackers).
+    "--disable-gpu",
+    "--renderer-process-limit=2",
+    "--disable-site-isolation-trials",
     "--disable-extensions",
     // ElasticOverscroll: macOS trackpad momentum keeps delivering wheel notches
     // for ~2s after the fingers lift. At a scroll boundary each one rubber-bands
