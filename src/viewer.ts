@@ -54,11 +54,11 @@ import { parseSgrMouseInput, type MouseMove, type SgrMouseEvent, type TerminalKe
 import type { BrowserTabInfo, DaemonMetrics, DaemonStatus } from "./daemonProtocol";
 import { loadConfig, saveBrowserZoom } from "./config";
 import { WheelDispatcher } from "./wheelDispatcher";
+import { minRenderIntervalMs } from "./renderCadence";
 
 const TOOLBAR_ROWS = 2;
 const RESIZE_POLL_MS = 250;
 const RESIZE_DEBOUNCE_MS = 150;
-const MIN_RENDER_INTERVAL_MS = 50;
 const STATUS_POLL_MS = 1_000;
 const CELL_METRICS_TTL_MS = 1_000;
 const HOVER_THROTTLE_MS = 40;
@@ -98,6 +98,7 @@ type RenderOptions = {
 type RenderContext = {
   viewId: string;
   kittyFrames: KittyFrameWriter;
+  lastTransport: string | null;
   graphicsTransport: GraphicsTransport;
   browserZoom: number;
   showDiagnostics: boolean;
@@ -208,6 +209,7 @@ async function main() {
   const renderContext: RenderContext = {
     viewId,
     kittyFrames: new KittyFrameWriter(),
+    lastTransport: null,
     graphicsTransport: configuredGraphicsTransport(),
     browserZoom: config.browserZoom,
     showDiagnostics: config.showDiagnostics,
@@ -311,6 +313,7 @@ async function renderOnce(
       }
     }
   }
+  context.lastTransport = transport;
   writeDiagnosticsLine(context, size, renderStatusLine({
     title: info.title,
     url,
@@ -687,7 +690,7 @@ async function watchResize(
       let nextOptions: RenderOptions | null = options;
       do {
         pendingRender = null;
-        const renderDelayMs = Math.max(0, MIN_RENDER_INTERVAL_MS - (Date.now() - lastRenderAt));
+        const renderDelayMs = Math.max(0, minRenderIntervalMs(context.lastTransport) - (Date.now() - lastRenderAt));
         if (renderDelayMs > 0) {
           await sleep(renderDelayMs);
         }
