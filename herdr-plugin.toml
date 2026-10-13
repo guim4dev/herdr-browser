@@ -1,0 +1,30 @@
+id = "official.browser"
+name = "Browser"
+version = "0.1.0"
+min_herdr_version = "0.7.4"
+description = "Open and inspect real browser pages from Herdr."
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "status"
+title = "Browser status"
+contexts = ["workspace"]
+command = ["bun", "run", "src/actions/status.ts"]
+
+[[actions]]
+id = "open-localhost"
+title = "Open localhost in browser"
+contexts = ["workspace"]
+command = ["bun", "run", "src/actions/open-localhost.ts"]
+
+[[panes]]
+id = "browser"
+title = "Browser"
+placement = "split"
+command = ["bun", "run", "src/viewer.ts"]
+
+[[link_handlers]]
+id = "localhost"
+title = "Open in Herdr Browser"
+pattern = "^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:[0-9]+)?([/?#].*)?$"
+action = "open-localhost"
