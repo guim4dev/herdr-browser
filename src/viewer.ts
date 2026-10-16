@@ -55,6 +55,7 @@ import type { BrowserTabInfo, DaemonMetrics, DaemonStatus } from "./daemonProtoc
 import { loadConfig, saveBrowserZoom } from "./config";
 import { WheelDispatcher } from "./wheelDispatcher";
 import { minRenderIntervalMs } from "./renderCadence";
+import { TerminalCellCache } from "./terminalCellCache";
 
 const TOOLBAR_ROWS = 2;
 const RESIZE_POLL_MS = 250;
@@ -110,6 +111,7 @@ type RenderContext = {
     value: ConfiguredCellPixels | null;
     expiresAt: number;
   } | null;
+  terminalCells: TerminalCellCache;
   paneGraphics: {
     target: PaneGraphicsTarget;
     disabled: boolean;
@@ -217,6 +219,7 @@ async function main() {
     stopInteractiveInput: null,
     appliedViewport: null,
     cellMetrics: null,
+    terminalCells: new TerminalCellCache(queryTerminalCellPixelSize),
     paneGraphics: paneGraphicsTarget
       ? {
         target: paneGraphicsTarget,
@@ -1261,7 +1264,7 @@ async function terminalViewport(
     };
   }
 
-  const cellPixels = await queryTerminalCellPixelSize();
+  const cellPixels = await context.terminalCells.get(size);
   if (cellPixels) {
     return {
       ...viewportGeometry(
