@@ -108,6 +108,20 @@ export function parseSgrMouseInput(
       }
     }
 
+    const control = controlSequenceAt(input, index);
+    if (control === "incomplete") {
+      flushText();
+      return { clicks, wheels, moves, mouseEvents, keys, remainder: input.slice(index) };
+    }
+    if (control) {
+      flushText();
+      if (control.key) {
+        keys.push(control.key);
+      }
+      index += control.length;
+      continue;
+    }
+
     const suffix = input.slice(index);
     if (isIncompleteKeyPrefix(suffix)) {
       flushText();
@@ -192,13 +206,55 @@ function viewportEventFromMouseEvent(
   return { kind: "click", click: point };
 }
 
+const CSI_ARROW_KEYS: Record<string, TerminalKeyInput> = {
+  A: { kind: "key", key: "ArrowUp" },
+  B: { kind: "key", key: "ArrowDown" },
+  C: { kind: "key", key: "ArrowRight" },
+  D: { kind: "key", key: "ArrowLeft" },
+};
+
+// Terminal replies (cell-size, DA, DSR, kitty graphics, OSC colour queries) arrive
+// on stdin like keys. A whole CSI/APC/OSC/DCS sequence is consumed here so its
+// bytes never reach the page as typed text; only plain arrows map to a key.
+function controlSequenceAt(
+  input: string,
+  index: number,
+): { key: TerminalKeyInput | null; length: number } | "incomplete" | null {
+  const sequence = input.slice(index);
+  if (sequence.startsWith("\x1b[")) {
+    const match = sequence.match(/^\x1b\[([0-?]*)[ -\/]*[@-~]/);
+    if (match) {
+      const final = match[0][match[0].length - 1];
+      const key = match[1] === "" && match[0].length === 3 ? CSI_ARROW_KEYS[final] ?? null : null;
+      return { key, length: match[0].length };
+    }
+    return /^\x1b\[[0-?]*[ -\/]*$/.test(sequence) ? "incomplete" : null;
+  }
+  if (/^\x1b[_\]P^X]/.test(sequence)) {
+    const end = stringTerminatorAt(sequence);
+    if (end === null) {
+      return "incomplete";
+    }
+    return { key: null, length: end };
+  }
+  return null;
+}
+
+function stringTerminatorAt(sequence: string): number | null {
+  for (let index = 2; index < sequence.length; index += 1) {
+    if (sequence[index] === "\x07") {
+      return index + 1;
+    }
+    if (sequence[index] === "\x1b" && sequence[index + 1] === "\\") {
+      return index + 2;
+    }
+  }
+  return null;
+}
+
 function keyInputAt(input: string, index: number): { input: TerminalKeyInput; length: number } | null {
   const sequence = input.slice(index);
   const named: Array<[string, TerminalKeyInput]> = [
-    ["\x1b[A", { kind: "key", key: "ArrowUp" }],
-    ["\x1b[B", { kind: "key", key: "ArrowDown" }],
-    ["\x1b[C", { kind: "key", key: "ArrowRight" }],
-    ["\x1b[D", { kind: "key", key: "ArrowLeft" }],
     ["\r", { kind: "key", key: "Enter" }],
     ["\n", { kind: "key", key: "Enter" }],
     ["\t", { kind: "key", key: "Tab" }],
@@ -232,5 +288,5 @@ function isIncompleteMousePrefix(input: string): boolean {
 }
 
 function isIncompleteKeyPrefix(input: string): boolean {
-  return input === "\x1b" || input === "\x1b[";
+  return input === "\x1b";
 }

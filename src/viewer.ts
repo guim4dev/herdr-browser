@@ -61,6 +61,7 @@ const RESIZE_POLL_MS = 250;
 const RESIZE_DEBOUNCE_MS = 150;
 const STATUS_POLL_MS = 1_000;
 const CELL_METRICS_TTL_MS = 1_000;
+const STALE_ESCAPE_SEQUENCE_MS = 150;
 const HOVER_THROTTLE_MS = 40;
 const FALLBACK_CELL_PIXELS = {
   width: 10,
@@ -595,6 +596,14 @@ async function watchResize(
           });
       }, 25);
       return;
+    }
+    if (mouseInput.startsWith("\x1b")) {
+      // An unterminated escape sequence (e.g. Alt+P sends ESC P, which opens a
+      // DCS string) must not swallow the keys typed after it.
+      escapeTimer = setTimeout(() => {
+        escapeTimer = null;
+        mouseInput = "";
+      }, STALE_ESCAPE_SEQUENCE_MS);
     }
     const toolbarActions = toolbarActionsFromMouseEvents(parsed.mouseEvents, current.toolbar);
     if (

@@ -220,3 +220,57 @@ test("parseSgrMouseInput exposes decoded mouse cell events", () => {
     },
   ]);
 });
+
+// Herdr answers the viewer's own `CSI 16t` cell-size probe with `CSI 6;h;w t`
+// on the pane's stdin. Parsed as keys, that reply typed "[6;17;8t" into the
+// focused page field on every render and triggered the next render.
+test("parseSgrMouseInput drops a terminal cell-size reply instead of typing it", () => {
+  expect(parseViewportInput("\x1b[6;17;8t")).toEqual({
+    clicks: [],
+    wheels: [],
+    moves: [],
+    keys: [],
+    remainder: "",
+  });
+});
+
+test("parseSgrMouseInput drops terminal replies around typed text", () => {
+  expect(parseViewportInput("ab\x1b[?62;22c\x1b[12;40R\x1b_Gi=31;OK\x1b\\\x1b]11;rgb:0000/0000/0000\x07\x1bP1$r0m\x1b\\cd")).toEqual({
+    clicks: [],
+    wheels: [],
+    moves: [],
+    keys: [
+      { kind: "text", text: "ab" },
+      { kind: "text", text: "cd" },
+    ],
+    remainder: "",
+  });
+});
+
+test("parseSgrMouseInput drops unmapped CSI keys instead of typing their bytes", () => {
+  expect(parseViewportInput("\x1b[1;5C\x1b[15~\x1b[I")).toEqual({
+    clicks: [],
+    wheels: [],
+    moves: [],
+    keys: [],
+    remainder: "",
+  });
+});
+
+test("parseSgrMouseInput carries a terminal reply split across chunks", () => {
+  const first = parseSgrMouseInput("\x1b[6;17", state);
+  expect(first.keys).toEqual([]);
+  expect(first.remainder).toBe("\x1b[6;17");
+  expect(parseViewportInput(`${first.remainder};8t`)).toEqual({
+    clicks: [],
+    wheels: [],
+    moves: [],
+    keys: [],
+    remainder: "",
+  });
+
+  const apc = parseSgrMouseInput("\x1b_Gi=31;O", state);
+  expect(apc.keys).toEqual([]);
+  expect(apc.remainder).toBe("\x1b_Gi=31;O");
+  expect(parseViewportInput(`${apc.remainder}K\x1b\\x`).keys).toEqual([{ kind: "text", text: "x" }]);
+});
